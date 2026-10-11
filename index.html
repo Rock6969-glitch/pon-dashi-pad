@@ -209,11 +209,54 @@
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     
     let currentCategoryIndex = 0;
-
     let categories = [
       { name: "効果音", pads: createEmptyPads() },
       { name: "BGM", pads: createEmptyPads() }
     ];
+
+    // IndexedDBの設定
+    const DB_NAME = 'PonDashiDB';
+    const DB_VERSION = 1;
+    let db = null;
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const dbInstance = e.target.result;
+          if (!dbInstance.objectStoreNames.contains('audioStore')) {
+            dbInstance.createObjectStore('audioStore');
+          }
+        };
+        request.onsuccess = (e) => {
+          db = e.target.result;
+          resolve(db);
+        };
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    function saveToDB(key, data) {
+      return new Promise((resolve, reject) => {
+        if (!db) return resolve();
+        const tx = db.transaction('audioStore', 'readwrite');
+        const store = tx.objectStore('audioStore');
+        store.put(data, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    function getFromDB(key) {
+      return new Promise((resolve, reject) => {
+        if (!db) return resolve(null);
+        const tx = db.transaction('audioStore', 'readonly');
+        const store = tx.objectStore('audioStore');
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = (e) => reject(e.target.error);
+      });
+    }
 
     function createEmptyPads() {
       return Array.from({ length: 9 }, () => ({
@@ -224,6 +267,7 @@
       }));
     }
 
+    // グリッド（3x3 = 9個）のHTML要素を生成
     for (let i = 0; i < 9; i++) {
       const padEl = document.createElement('div');
       padEl.className = 'card';
@@ -238,8 +282,7 @@
         </div>
         <div class="file-input-wrapper">
           <span class="file-btn-label" id="label-${i}">音源選択</span>
-          <!-- ここを修正：accept属性をiPhone対応に最適化 -->
-          <input type="file" class="file-input" accept=".mp3,audio/mpeg" onchange="loadAudio(event, ${i})">
+          <input type="file" class="file-input" accept=".mp3,audio/mpeg,audio/wav" onchange="loadAudio(event, ${i})">
         </div>
       `;
       padGrid.appendChild(padEl);
@@ -319,19 +362,28 @@
       switchCategory(currentCategoryIndex);
     }
 
-    function loadAudio(event, index) {
+    // 音声ファイルの読み込みと IndexedDB への保存
+    async function loadAudio(event, index) {
       const file = event.target.files[0];
       if (!file) return;
 
-      const pad = categories[currentCategoryIndex].pads[index];
       const reader = new FileReader();
-
-      reader.onload = function(e) {
-        audioContext.decodeAudioData(e.target.result, function(buffer) {
+      reader.onload = async function(e) {
+        const arrayBuffer = e.target.result;
+        audioContext.decodeAudioData(arrayBuffer, async function(buffer) {
+          const pad = categories[currentCategoryIndex].pads[index];
           pad.audioBuffer = buffer;
           pad.fileName = file.name;
-          document.getElementById(`name-${index}`).innerText = file.name;
-          document.getElementById(`label-${index}`).innerText = "変更";
+
+          updateGridDisplay();
+
+          // IndexedDBに保存（カテゴリインデックスとパッドインデックスをキーにする）
+          const dbKey = `cat_${currentCategoryIndex}_pad_${index}`;
+          const saveData = {
+            fileName: file.name,
+            arrayBuffer: arrayBuffer
+          };
+          await saveToDB(dbKey, saveData);
         });
       };
       reader.readAsArrayBuffer(file);
@@ -385,17 +437,40 @@
         });
       });
       for (let i = 0; i < 9; i++) {
-        document.getElementById(`btn-${i}`).classList.remove('playing');
+        const btn = document.getElementById(`btn-${i}`);
+        if (btn) btn.classList.remove('playing');
       }
     }
 
+    // 起動時にIndexedDBから保存済み音源を復元する
+    async function restoreSavedAudio() {
+      await openDB();
+      for (let c = 0; c < categories.length; c++) {
+        for (let p = 0; p < 9; p++) {
+          const dbKey = `cat_${c}_pad_${p}`;
+          const savedData = await getFromDB(dbKey);
+          if (savedData && savedData.arrayBuffer) {
+            try {
+              const buffer = await audioContext.decodeAudioData(savedData.arrayBuffer);
+              categories[c].pads[p].audioBuffer = buffer;
+              categories[c].pads[p].fileName = savedData.fileName;
+            } catch (err) {
+              console.error("音声の復元エラー:", err);
+            }
+          }
+        }
+      }
+      updateGridDisplay();
+    }
+
+    // 初期化実行
+    restoreSavedAudio();
     renderTabs();
-    updateGridDisplay();
+
+    // Service Workerの登録
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
   </script>
-  <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js');
-  }
-</script>
 </body>
 </html>
