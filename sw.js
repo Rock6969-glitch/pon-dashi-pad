@@ -1,7 +1,11 @@
-const CACHE_NAME = 'pon-dashi-cache-v1';
+const CACHE_NAME = 'pon-dashi-cache-v2'; // キャッシュ名を更新
 const urlsToCache = [
   './',
-  './index.html'
+  './index.html',
+  './sw.js',
+  // 使用している音源ファイルをすべて記述（例）
+  './audio/sound1.mp3',
+  './audio/sound2.mp3'
 ];
 
 self.addEventListener('install', (event) => {
