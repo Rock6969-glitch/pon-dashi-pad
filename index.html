@@ -66,7 +66,7 @@
       color: #ffffff;
     }
     .icon-btn {
-      padding: 8px 12px;
+      padding: 8px 10px;
       font-size: 0.8rem;
       background-color: #e5e5ea;
       border: none;
@@ -76,6 +76,11 @@
     }
     .icon-btn:active {
       background-color: #d1d1d6;
+    }
+    .help-btn {
+      background-color: #5856d6;
+      color: white;
+      font-weight: bold;
     }
     /* 3x3 グリッド */
     .grid {
@@ -210,6 +215,71 @@
     .stop-btn:active {
       background-color: #d70015;
     }
+
+    /* モーダル (ポップアップ) スタイル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+    .modal-content {
+      background: #ffffff;
+      width: 100%;
+      max-width: 500px;
+      max-height: 80vh;
+      border-radius: 14px;
+      padding: 20px;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      position: relative;
+      color: #1c1c1e;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #e5e5ea;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin: 0;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      color: #8e8e93;
+      cursor: pointer;
+    }
+    .help-section {
+      margin-bottom: 14px;
+    }
+    .help-section h3 {
+      font-size: 0.9rem;
+      color: #007aff;
+      margin: 0 0 6px 0;
+    }
+    .help-section ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #3a3a3c;
+    }
   </style>
 </head>
 <body>
@@ -221,6 +291,7 @@
       <button class="icon-btn" onclick="addCategory()" title="カテゴリ追加">＋</button>
       <button class="icon-btn" onclick="renameCategory()" title="名前変更">✏️</button>
       <button class="icon-btn" onclick="deleteCategory()" title="カテゴリ削除">🗑️</button>
+      <button class="icon-btn help-btn" onclick="toggleModal(true)" title="使い方">❓ 使い方</button>
     </div>
 
     <!-- 3x3 グリッド -->
@@ -228,6 +299,43 @@
 
     <!-- 全停止ボタン -->
     <button class="stop-btn" onclick="stopAll()">⏹️ 全停止 (STOP ALL)</button>
+  </div>
+
+  <!-- ポップアップモーダル (使い方ヘルプ) -->
+  <div class="modal-overlay" id="helpModal" onclick="handleOverlayClick(event)">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">📱 使い方マニュアル</h2>
+        <button class="modal-close" onclick="toggleModal(false)">✕</button>
+      </div>
+
+      <div class="help-section">
+        <h3>1. 基本設定</h3>
+        <ul>
+          <li><b>音源選択:</b> 各パッド下の「音源選択」を押してMP3等のファイルを選択。</li>
+          <li><b>音量調整:</b> 「Vol」スライダーでパッドごとの音量を変更。</li>
+          <li><b>カテゴリ管理:</b> 上部タブで「＋」で追加、「✏️」で名前変更、「🗑️」で削除。</li>
+        </ul>
+      </div>
+
+      <div class="help-section">
+        <h3>2. 本番操作</h3>
+        <ul>
+          <li><b>再生:</b> パッドをタップすると鳴り、緑色に点灯します。</li>
+          <li><b>■ 停止:</b> 再生中に押すと、その音を即座に停止します。</li>
+          <li><b>📉 ﾌｪｰﾄﾞ:</b> 1秒かけてスーッと音量を下げるフェードアウト停止。</li>
+          <li><b>全停止:</b> 下部の赤いボタンで鳴っているすべての音を停止。</li>
+        </ul>
+      </div>
+
+      <div class="help-section">
+        <h3>3. オフライン機能</h3>
+        <ul>
+          <li>設定した音源データはスマホ内(IndexedDB)に自動保存されます。</li>
+          <li>機内モードや回線のない場所でもそのまま使えます。</li>
+        </ul>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -509,6 +617,22 @@
       for (let i = 0; i < 9; i++) {
         const btn = document.getElementById(`btn-${i}`);
         if (btn) btn.classList.remove('playing');
+      }
+    }
+
+    // モーダル開閉処理
+    function toggleModal(show) {
+      const modal = document.getElementById('helpModal');
+      if (show) {
+        modal.classList.add('open');
+      } else {
+        modal.classList.remove('open');
+      }
+    }
+
+    function handleOverlayClick(event) {
+      if (event.target.id === 'helpModal') {
+        toggleModal(false);
       }
     }
 
