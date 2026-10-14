@@ -122,6 +122,33 @@
       background-color: #34c759;
       color: #ffffff;
     }
+    .pad-controls {
+      display: flex;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .action-sub-btn {
+      flex: 1;
+      padding: 4px 0;
+      font-size: 0.65rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+    }
+    .stop-sub-btn {
+      background-color: #ff3b30;
+    }
+    .stop-sub-btn:active {
+      background-color: #d70015;
+    }
+    .fade-sub-btn {
+      background-color: #ff9500;
+    }
+    .fade-sub-btn:active {
+      background-color: #cc7a00;
+    }
     .controls {
       width: 100%;
       display: flex;
@@ -146,10 +173,10 @@
     .file-btn-label {
       display: block;
       width: 100%;
-      padding: 4px 0;
+      padding: 3px 0;
       background-color: #eef0f2;
       color: #636366;
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       text-align: center;
       border-radius: 4px;
       cursor: pointer;
@@ -262,6 +289,7 @@
       return Array.from({ length: 9 }, () => ({
         audioBuffer: null,
         currentSource: null,
+        gainNode: null,
         volume: 1.0,
         fileName: ''
       }));
@@ -276,6 +304,10 @@
           <div>[${i + 1}]</div>
           <div style="font-size:0.7rem; font-weight:normal; margin-top:2px;" id="name-${i}">未設定</div>
         </button>
+        <div class="pad-controls">
+          <button class="action-sub-btn stop-sub-btn" onclick="stopPad(${i})">■ 停止</button>
+          <button class="action-sub-btn fade-sub-btn" onclick="fadeOutPad(${i})">📉 ﾌｪｰﾄﾞ</button>
+        </div>
         <div class="controls">
           <label>Vol</label>
           <input type="range" id="vol-${i}" min="0" max="1" step="0.05" value="1" oninput="updateVolume(${i})">
@@ -377,7 +409,6 @@
 
           updateGridDisplay();
 
-          // IndexedDBに保存（カテゴリインデックスとパッドインデックスをキーにする）
           const dbKey = `cat_${currentCategoryIndex}_pad_${index}`;
           const saveData = {
             fileName: file.name,
@@ -405,26 +436,64 @@
       source.buffer = pad.audioBuffer;
 
       const gainNode = audioContext.createGain();
-      gainNode.gain.value = pad.volume;
+      gainNode.gain.setValueAtTime(pad.volume, audioContext.currentTime);
 
       source.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
       source.start(0);
       pad.currentSource = source;
+      pad.gainNode = gainNode;
 
       const btn = document.getElementById(`btn-${index}`);
       btn.classList.add('playing');
 
       source.onended = () => {
-        pad.currentSource = null;
-        btn.classList.remove('playing');
+        if (pad.currentSource === source) {
+          pad.currentSource = null;
+          pad.gainNode = null;
+          btn.classList.remove('playing');
+        }
       };
+    }
+
+    function stopPad(index) {
+      const pad = categories[currentCategoryIndex].pads[index];
+      if (pad.currentSource) {
+        try { pad.currentSource.stop(); } catch(e) {}
+        pad.currentSource = null;
+        pad.gainNode = null;
+      }
+      document.getElementById(`btn-${index}`).classList.remove('playing');
+    }
+
+    function fadeOutPad(index) {
+      const pad = categories[currentCategoryIndex].pads[index];
+      if (pad.currentSource && pad.gainNode) {
+        const now = audioContext.currentTime;
+        const fadeDuration = 1.0;
+        
+        pad.gainNode.gain.setValueAtTime(pad.gainNode.gain.value, now);
+        pad.gainNode.gain.linearRampToValueAtTime(0.0001, now + fadeDuration);
+
+        setTimeout(() => {
+          if (pad.currentSource) {
+            try { pad.currentSource.stop(); } catch(e) {}
+            pad.currentSource = null;
+            pad.gainNode = null;
+          }
+          document.getElementById(`btn-${index}`).classList.remove('playing');
+        }, fadeDuration * 1000);
+      }
     }
 
     function updateVolume(index) {
       const volVal = parseFloat(document.getElementById(`vol-${index}`).value);
-      categories[currentCategoryIndex].pads[index].volume = volVal;
+      const pad = categories[currentCategoryIndex].pads[index];
+      pad.volume = volVal;
+      if (pad.gainNode) {
+        pad.gainNode.gain.setValueAtTime(volVal, audioContext.currentTime);
+      }
     }
 
     function stopAll() {
@@ -433,6 +502,7 @@
           if (pad.currentSource) {
             try { pad.currentSource.stop(); } catch(e) {}
             pad.currentSource = null;
+            pad.gainNode = null;
           }
         });
       });
@@ -442,7 +512,6 @@
       }
     }
 
-    // 起動時にIndexedDBから保存済み音源を復元する
     async function restoreSavedAudio() {
       await openDB();
       for (let c = 0; c < categories.length; c++) {
@@ -463,11 +532,9 @@
       updateGridDisplay();
     }
 
-    // 初期化実行
     restoreSavedAudio();
     renderTabs();
 
-    // Service Workerの登録
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js');
     }
